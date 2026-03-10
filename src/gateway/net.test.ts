@@ -236,14 +236,19 @@ describe("resolveClientIp", () => {
 
 describe("resolveGatewayListenHosts", () => {
   it("resolves listen hosts for non-loopback and loopback variants", async () => {
-    const cases = [
+    const cases: Array<{
+      name: string;
+      host: string;
+      canBindToHost: (host: string) => Promise<boolean>;
+      expected: string[];
+    }> = [
       {
         name: "non-loopback host passthrough",
-        host: "0.0.0.0",
+        host: "192.168.1.1",
         canBindToHost: async () => {
           throw new Error("should not be called");
         },
-        expected: ["0.0.0.0"],
+        expected: ["192.168.1.1"],
       },
       {
         name: "loopback with IPv6 available",
@@ -257,7 +262,19 @@ describe("resolveGatewayListenHosts", () => {
         canBindToHost: async () => false,
         expected: ["127.0.0.1"],
       },
-    ] as const;
+      {
+        name: "lan (0.0.0.0) with IPv6 available - adds :: for Railway/PaaS IPv6 proxies",
+        host: "0.0.0.0",
+        canBindToHost: async (h) => h === "::",
+        expected: ["0.0.0.0", "::"],
+      },
+      {
+        name: "lan (0.0.0.0) with IPv6 unavailable",
+        host: "0.0.0.0",
+        canBindToHost: async () => false,
+        expected: ["0.0.0.0"],
+      },
+    ];
 
     for (const testCase of cases) {
       const hosts = await resolveGatewayListenHosts(testCase.host, {

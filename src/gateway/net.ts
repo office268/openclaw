@@ -296,12 +296,24 @@ export async function resolveGatewayListenHosts(
   bindHost: string,
   opts?: { canBindToHost?: (host: string) => Promise<boolean> },
 ): Promise<string[]> {
-  if (bindHost !== "127.0.0.1") {
+  if (bindHost !== "127.0.0.1" && bindHost !== "0.0.0.0") {
     return [bindHost];
   }
   const canBind = opts?.canBindToHost ?? canBindToHost;
-  if (await canBind("::1")) {
-    return [bindHost, "::1"];
+  if (bindHost === "127.0.0.1") {
+    if (await canBind("::1")) {
+      return [bindHost, "::1"];
+    }
+    return [bindHost];
+  }
+  // LAN mode (0.0.0.0): also try :: for dual-stack IPv6 coverage.
+  // Railway and other PaaS platforms proxy via IPv6; without this alias
+  // the gateway would be unreachable from IPv6-only proxy ingress.
+  // If the bind fails at listen time (e.g. EADDRINUSE on dual-stack Linux
+  // where :: already covers IPv4), server-runtime-state logs a warning and
+  // continues with the primary IPv4 listener.
+  if (await canBind("::")) {
+    return [bindHost, "::"];
   }
   return [bindHost];
 }
